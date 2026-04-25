@@ -1,6 +1,12 @@
 spring:
   application:
     name: control-plane-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:job_platform}
+    username: ${DB_USERNAME:jobplatform}
+    password: ${DB_PASSWORD:jobplatform}
+  flyway:
+    enabled: true
 
 server:
   port: 8080
