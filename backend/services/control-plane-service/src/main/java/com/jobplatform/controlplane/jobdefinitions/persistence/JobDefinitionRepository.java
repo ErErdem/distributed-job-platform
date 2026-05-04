@@ -2,14 +2,20 @@ package com.jobplatform.controlplane.jobdefinitions.persistence;
 
 import static com.jobplatform.controlplane.jooq.generated.Tables.JOB_DEFINITIONS;
 
+import com.jobplatform.controlplane.jobdefinitions.application.JobDefinitionSearchCriteria;
+import com.jobplatform.controlplane.jobdefinitions.application.UpdateJobDefinitionCommand;
 import com.jobplatform.controlplane.jobdefinitions.domain.JobDefinition;
 import com.jobplatform.controlplane.shared.error.DuplicateResourceException;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.jooq.exception.DataAccessException;
+import org.jooq.impl.DSL;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
@@ -75,6 +81,107 @@ public class JobDefinitionRepository {
                 .fetchOptional(this::mapRecord);
     }
 
+    public List<JobDefinition> findAll(JobDefinitionSearchCriteria criteria) {
+        return dsl.select(
+                        JOB_DEFINITIONS.ID,
+                        JOB_DEFINITIONS.NAME,
+                        JOB_DEFINITIONS.JOB_TYPE,
+                        JOB_DEFINITIONS.PRIORITY,
+                        JOB_DEFINITIONS.MAX_RETRIES,
+                        JOB_DEFINITIONS.TIMEOUT_SECONDS,
+                        JOB_DEFINITIONS.ENABLED,
+                        JOB_DEFINITIONS.CREATED_AT,
+                        JOB_DEFINITIONS.UPDATED_AT
+                )
+                .from(JOB_DEFINITIONS)
+                .where(toCondition(criteria))
+                .orderBy(JOB_DEFINITIONS.CREATED_AT.desc())
+                .limit(criteria.limit())
+                .offset(criteria.offset())
+                .fetch(this::mapRecord);
+    }
+
+    public long count(JobDefinitionSearchCriteria criteria) {
+        return dsl.selectCount()
+                .from(JOB_DEFINITIONS)
+                .where(toCondition(criteria))
+                .fetchSingle(0, long.class);
+    }
+
+    public Optional<JobDefinition> update(
+            UUID id,
+            UpdateJobDefinitionCommand command,
+            OffsetDateTime updatedAt
+    ) {
+        try {
+            return dsl.update(JOB_DEFINITIONS)
+                    .set(JOB_DEFINITIONS.NAME, command.name())
+                    .set(JOB_DEFINITIONS.JOB_TYPE, command.jobType())
+                    .set(JOB_DEFINITIONS.PRIORITY, toSmallInt(command.priority()))
+                    .set(JOB_DEFINITIONS.MAX_RETRIES, toSmallInt(command.maxRetries()))
+                    .set(JOB_DEFINITIONS.TIMEOUT_SECONDS, command.timeoutSeconds())
+                    .set(JOB_DEFINITIONS.UPDATED_AT, updatedAt)
+                    .where(JOB_DEFINITIONS.ID.eq(id))
+                    .returning(
+                            JOB_DEFINITIONS.ID,
+                            JOB_DEFINITIONS.NAME,
+                            JOB_DEFINITIONS.JOB_TYPE,
+                            JOB_DEFINITIONS.PRIORITY,
+                            JOB_DEFINITIONS.MAX_RETRIES,
+                            JOB_DEFINITIONS.TIMEOUT_SECONDS,
+                            JOB_DEFINITIONS.ENABLED,
+                            JOB_DEFINITIONS.CREATED_AT,
+                            JOB_DEFINITIONS.UPDATED_AT
+                    )
+                    .fetchOptional()
+                    .map(this::mapRecord);
+        } catch (DataIntegrityViolationException ex) {
+            throwDuplicateNameIfMatched(command.name(), ex);
+            throw ex;
+        } catch (DataAccessException ex) {
+            throwDuplicateNameIfMatched(command.name(), ex);
+            throw ex;
+        }
+    }
+
+    public Optional<JobDefinition> updateEnabled(UUID id, boolean enabled, OffsetDateTime updatedAt) {
+        return dsl.update(JOB_DEFINITIONS)
+                .set(JOB_DEFINITIONS.ENABLED, enabled)
+                .set(JOB_DEFINITIONS.UPDATED_AT, updatedAt)
+                .where(JOB_DEFINITIONS.ID.eq(id))
+                .returning(
+                        JOB_DEFINITIONS.ID,
+                        JOB_DEFINITIONS.NAME,
+                        JOB_DEFINITIONS.JOB_TYPE,
+                        JOB_DEFINITIONS.PRIORITY,
+                        JOB_DEFINITIONS.MAX_RETRIES,
+                        JOB_DEFINITIONS.TIMEOUT_SECONDS,
+                        JOB_DEFINITIONS.ENABLED,
+                        JOB_DEFINITIONS.CREATED_AT,
+                        JOB_DEFINITIONS.UPDATED_AT
+                )
+                .fetchOptional()
+                .map(this::mapRecord);
+    }
+
+    private Condition toCondition(JobDefinitionSearchCriteria criteria) {
+        Condition condition = DSL.trueCondition();
+
+        if (criteria.enabled() != null) {
+            condition = condition.and(JOB_DEFINITIONS.ENABLED.eq(criteria.enabled()));
+        }
+
+        if (hasText(criteria.jobType())) {
+            condition = condition.and(JOB_DEFINITIONS.JOB_TYPE.eq(criteria.jobType()));
+        }
+
+        if (hasText(criteria.name())) {
+            condition = condition.and(JOB_DEFINITIONS.NAME.containsIgnoreCase(criteria.name()));
+        }
+
+        return condition;
+    }
+
     private JobDefinition mapRecord(Record record) {
         return new JobDefinition(
                 record.get(JOB_DEFINITIONS.ID),
@@ -91,6 +198,10 @@ public class JobDefinitionRepository {
 
     private short toSmallInt(int value) {
         return (short) value;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private void throwDuplicateNameIfMatched(String name, RuntimeException exception) {

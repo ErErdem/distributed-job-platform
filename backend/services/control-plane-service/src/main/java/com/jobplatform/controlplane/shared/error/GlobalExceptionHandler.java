@@ -1,6 +1,7 @@
 package com.jobplatform.controlplane.shared.error;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.stream.Collectors;
@@ -10,6 +11,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
@@ -38,6 +40,32 @@ public class GlobalExceptionHandler {
     ) {
         String message = exception.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + " " + error.getDefaultMessage())
+                .sorted()
+                .collect(Collectors.joining("; "));
+
+        return buildResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleConstraintViolation(
+            ConstraintViolationException exception,
+            HttpServletRequest request
+    ) {
+        String message = exception.getConstraintViolations().stream()
+                .map(violation -> violation.getPropertyPath() + " " + violation.getMessage())
+                .sorted()
+                .collect(Collectors.joining("; "));
+
+        return buildResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiErrorResponse> handleHandlerMethodValidation(
+            HandlerMethodValidationException exception,
+            HttpServletRequest request
+    ) {
+        String message = exception.getAllErrors().stream()
+                .map(error -> error.getDefaultMessage() == null ? "Invalid request" : error.getDefaultMessage())
                 .sorted()
                 .collect(Collectors.joining("; "));
 
