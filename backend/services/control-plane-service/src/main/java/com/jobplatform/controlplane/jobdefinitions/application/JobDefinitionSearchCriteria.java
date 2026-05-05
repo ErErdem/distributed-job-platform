@@ -5,6 +5,7 @@ public record JobDefinitionSearchCriteria(
         String jobType,
         String name,
         int limit,
-        int offset
+        int offset,
+        String sortDirection
 ) {
 }

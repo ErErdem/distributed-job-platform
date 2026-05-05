@@ -74,10 +74,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
-            MethodArgumentTypeMismatchException.class
+            MethodArgumentTypeMismatchException.class,
+            IllegalArgumentException.class
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(Exception exception, HttpServletRequest request) {
-        return buildResponse(HttpStatus.BAD_REQUEST, "Invalid request", request);
+        String message = exception.getMessage() == null ? "Invalid request" : exception.getMessage();
+        return buildResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
     private ResponseEntity<ApiErrorResponse> buildResponse(

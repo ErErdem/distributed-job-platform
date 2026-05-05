@@ -5,6 +5,7 @@ import com.jobplatform.controlplane.jobdefinitions.application.JobDefinitionSear
 import com.jobplatform.controlplane.jobdefinitions.application.JobDefinitionService;
 import com.jobplatform.controlplane.jobdefinitions.application.UpdateJobDefinitionCommand;
 import com.jobplatform.controlplane.jobdefinitions.domain.JobDefinition;
+import com.jobplatform.controlplane.shared.pagination.PageResult;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -60,21 +61,24 @@ public class JobDefinitionController {
             @RequestParam(required = false) String jobType,
             @RequestParam(required = false) String name,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer limit,
-            @RequestParam(defaultValue = "0") @Min(0) Integer offset
+            @RequestParam(defaultValue = "0") @Min(0) Integer offset,
+            @RequestParam(defaultValue = "desc") String sortDirection
     ) {
         JobDefinitionSearchCriteria criteria = new JobDefinitionSearchCriteria(
                 enabled,
                 jobType,
                 name,
                 limit,
-                offset
+                offset,
+                normalizeSortDirection(sortDirection)
         );
 
-        List<JobDefinitionResponse> items = service.list(criteria).stream()
+        PageResult<JobDefinition> result = service.search(criteria);
+        List<JobDefinitionResponse> items = result.items().stream()
                 .map(JobDefinitionResponse::from)
                 .toList();
 
-        return new JobDefinitionListResponse(items, limit, offset, service.count(criteria));
+        return new JobDefinitionListResponse(items, result.page());
     }
 
     @PutMapping("/{id}")
@@ -101,5 +105,14 @@ public class JobDefinitionController {
     @PatchMapping("/{id}/disable")
     public JobDefinitionResponse disable(@PathVariable UUID id) {
         return JobDefinitionResponse.from(service.disable(id));
+    }
+
+    private String normalizeSortDirection(String sortDirection) {
+        String direction = sortDirection == null ? "desc" : sortDirection.trim().toLowerCase();
+        if (!"asc".equals(direction) && !"desc".equals(direction)) {
+            throw new IllegalArgumentException("sortDirection must be asc or desc");
+        }
+
+        return direction;
     }
 }

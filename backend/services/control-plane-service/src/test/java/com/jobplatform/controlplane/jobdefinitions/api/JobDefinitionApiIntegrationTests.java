@@ -123,9 +123,10 @@ class JobDefinitionApiIntegrationTests {
         mockMvc.perform(get("/api/v1/job-definitions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(2))
-                .andExpect(jsonPath("$.limit").value(20))
-                .andExpect(jsonPath("$.offset").value(0))
-                .andExpect(jsonPath("$.total").value(2));
+                .andExpect(jsonPath("$.page.limit").value(20))
+                .andExpect(jsonPath("$.page.offset").value(0))
+                .andExpect(jsonPath("$.page.total").value(2))
+                .andExpect(jsonPath("$.page.hasNext").value(false));
     }
 
     @Test
@@ -142,7 +143,8 @@ class JobDefinitionApiIntegrationTests {
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].id").value(disabledId))
                 .andExpect(jsonPath("$.items[0].enabled").value(false))
-                .andExpect(jsonPath("$.total").value(1));
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.page.hasNext").value(false));
 
         mockMvc.perform(get("/api/v1/job-definitions")
                         .param("enabled", "true"))
@@ -150,7 +152,8 @@ class JobDefinitionApiIntegrationTests {
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].id").value(enabledId))
                 .andExpect(jsonPath("$.items[0].enabled").value(true))
-                .andExpect(jsonPath("$.total").value(1));
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.page.hasNext").value(false));
     }
 
     @Test
@@ -166,7 +169,7 @@ class JobDefinitionApiIntegrationTests {
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].name").value("daily-cleanup"))
                 .andExpect(jsonPath("$.items[0].jobType").value("SHELL_COMMAND"))
-                .andExpect(jsonPath("$.total").value(1));
+                .andExpect(jsonPath("$.page.total").value(1));
     }
 
     @Test
@@ -181,7 +184,7 @@ class JobDefinitionApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].name").value("Email-Report"))
-                .andExpect(jsonPath("$.total").value(1));
+                .andExpect(jsonPath("$.page.total").value(1));
     }
 
     @Test
@@ -196,6 +199,100 @@ class JobDefinitionApiIntegrationTests {
                         .param("offset", "-1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.path").value("/api/v1/job-definitions"));
+    }
+
+    @Test
+    void listCalculatesHasNext() throws Exception {
+        createJobDefinition("email-report")
+                .andExpect(status().isCreated());
+        createJobDefinition("cleanup-temp-files")
+                .andExpect(status().isCreated());
+        createJobDefinition("weekly-summary")
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/job-definitions")
+                        .param("limit", "2")
+                        .param("offset", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.page.limit").value(2))
+                .andExpect(jsonPath("$.page.offset").value(0))
+                .andExpect(jsonPath("$.page.total").value(3))
+                .andExpect(jsonPath("$.page.hasNext").value(true));
+
+        mockMvc.perform(get("/api/v1/job-definitions")
+                        .param("limit", "2")
+                        .param("offset", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.page.limit").value(2))
+                .andExpect(jsonPath("$.page.offset").value(2))
+                .andExpect(jsonPath("$.page.total").value(3))
+                .andExpect(jsonPath("$.page.hasNext").value(false));
+    }
+
+    @Test
+    void listSupportsPaginationBoundaries() throws Exception {
+        createJobDefinition("email-report")
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/job-definitions")
+                        .param("limit", "100")
+                        .param("offset", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.page.limit").value(100))
+                .andExpect(jsonPath("$.page.offset").value(0))
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.page.hasNext").value(false));
+    }
+
+    @Test
+    void listCombinesFilteringAndPagination() throws Exception {
+        createJobDefinition("daily-report", "HTTP_CALL")
+                .andExpect(status().isCreated());
+        createJobDefinition("weekly-report", "HTTP_CALL")
+                .andExpect(status().isCreated());
+        createJobDefinition("monthly-report", "HTTP_CALL")
+                .andExpect(status().isCreated());
+        createJobDefinition("report-shell", "SHELL_COMMAND")
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/job-definitions")
+                        .param("jobType", "HTTP_CALL")
+                        .param("name", " report ")
+                        .param("limit", "2")
+                        .param("offset", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.page.limit").value(2))
+                .andExpect(jsonPath("$.page.offset").value(0))
+                .andExpect(jsonPath("$.page.total").value(3))
+                .andExpect(jsonPath("$.page.hasNext").value(true));
+    }
+
+    @Test
+    void listSupportsCreatedAtAscendingSort() throws Exception {
+        createJobDefinition("first-job")
+                .andExpect(status().isCreated());
+        createJobDefinition("second-job")
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/job-definitions")
+                        .param("sortDirection", "asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].name").value("first-job"))
+                .andExpect(jsonPath("$.items[1].name").value("second-job"));
+    }
+
+    @Test
+    void listRejectsInvalidSortDirection() throws Exception {
+        mockMvc.perform(get("/api/v1/job-definitions")
+                        .param("sortDirection", "sideways"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("sortDirection must be asc or desc"))
                 .andExpect(jsonPath("$.path").value("/api/v1/job-definitions"));
     }
 

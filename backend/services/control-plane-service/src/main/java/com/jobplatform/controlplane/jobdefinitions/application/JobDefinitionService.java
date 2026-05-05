@@ -3,6 +3,8 @@ package com.jobplatform.controlplane.jobdefinitions.application;
 import com.jobplatform.controlplane.jobdefinitions.domain.JobDefinition;
 import com.jobplatform.controlplane.jobdefinitions.persistence.JobDefinitionRepository;
 import com.jobplatform.controlplane.shared.error.ResourceNotFoundException;
+import com.jobplatform.controlplane.shared.pagination.PageMetadata;
+import com.jobplatform.controlplane.shared.pagination.PageResult;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -44,13 +46,15 @@ public class JobDefinitionService {
     }
 
     @Transactional(readOnly = true)
-    public List<JobDefinition> list(JobDefinitionSearchCriteria criteria) {
-        return repository.findAll(criteria);
-    }
+    public PageResult<JobDefinition> search(JobDefinitionSearchCriteria criteria) {
+        List<JobDefinition> items = repository.findAll(criteria);
+        long total = repository.count(criteria);
+        boolean hasNext = (long) criteria.offset() + items.size() < total;
 
-    @Transactional(readOnly = true)
-    public long count(JobDefinitionSearchCriteria criteria) {
-        return repository.count(criteria);
+        return new PageResult<>(
+                items,
+                new PageMetadata(criteria.limit(), criteria.offset(), total, hasNext)
+        );
     }
 
     @Transactional

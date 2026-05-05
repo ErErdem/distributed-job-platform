@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
+import org.jooq.OrderField;
 import org.jooq.Record;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
@@ -95,7 +96,7 @@ public class JobDefinitionRepository {
                 )
                 .from(JOB_DEFINITIONS)
                 .where(toCondition(criteria))
-                .orderBy(JOB_DEFINITIONS.CREATED_AT.desc())
+                .orderBy(toSort(criteria))
                 .limit(criteria.limit())
                 .offset(criteria.offset())
                 .fetch(this::mapRecord);
@@ -171,15 +172,25 @@ public class JobDefinitionRepository {
             condition = condition.and(JOB_DEFINITIONS.ENABLED.eq(criteria.enabled()));
         }
 
-        if (hasText(criteria.jobType())) {
-            condition = condition.and(JOB_DEFINITIONS.JOB_TYPE.eq(criteria.jobType()));
+        String jobType = trimToNull(criteria.jobType());
+        if (jobType != null) {
+            condition = condition.and(JOB_DEFINITIONS.JOB_TYPE.eq(jobType));
         }
 
-        if (hasText(criteria.name())) {
-            condition = condition.and(JOB_DEFINITIONS.NAME.containsIgnoreCase(criteria.name()));
+        String name = trimToNull(criteria.name());
+        if (name != null) {
+            condition = condition.and(JOB_DEFINITIONS.NAME.containsIgnoreCase(name));
         }
 
         return condition;
+    }
+
+    private OrderField<OffsetDateTime> toSort(JobDefinitionSearchCriteria criteria) {
+        if ("asc".equals(criteria.sortDirection())) {
+            return JOB_DEFINITIONS.CREATED_AT.asc();
+        }
+
+        return JOB_DEFINITIONS.CREATED_AT.desc();
     }
 
     private JobDefinition mapRecord(Record record) {
@@ -200,8 +211,13 @@ public class JobDefinitionRepository {
         return (short) value;
     }
 
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank();
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+        return trimmed.isBlank() ? null : trimmed;
     }
 
     private void throwDuplicateNameIfMatched(String name, RuntimeException exception) {
