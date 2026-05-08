@@ -37,6 +37,7 @@ class JobDefinitionApiIntegrationTests {
 
     @BeforeEach
     void cleanDatabase() {
+        jdbcTemplate.update("DELETE FROM job_runs");
         jdbcTemplate.update("DELETE FROM job_definitions");
     }
 

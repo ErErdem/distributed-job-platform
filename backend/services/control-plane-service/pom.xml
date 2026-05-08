@@ -139,7 +139,7 @@
                         <database>
                             <name>org.jooq.meta.postgres.PostgresDatabase</name>
                             <inputSchema>public</inputSchema>
-                            <includes>job_definitions</includes>
+                            <includes>job_definitions|job_runs</includes>
                             <excludes>flyway_schema_history|platform_metadata</excludes>
                         </database>
                         <generate>
